@@ -1,0 +1,36 @@
+# ---- Python general ----
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+dist/
+build/
+
+# ---- Virtual envs ----
+.env/
+.venv/
+env/
+venv/
+*/env/
+*/venv/
+
+# ---- Jupyter / experiments ----
+.ipynb_checkpoints/
+wandb/
+logs/
+runs/
+checkpoints/
+tensorboard/
+*.tfevents.*
+
+# ---- OS / Editor junk ----
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# ---- Data (large or generated) ----
+data/*.npy
+data/*.npz
+data/*.csv
+# ↑ 必要ならコメントアウト or Git LFS へ
