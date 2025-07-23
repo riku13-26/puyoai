@@ -10,6 +10,7 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 import wandb
 from pathlib import Path
+from transformers import get_cosine_schedule_with_warmup
 
 # プロジェクトルート (= PUYO/) を取得
 ROOT_DIR  = Path(__file__).resolve().parents[1]
@@ -34,8 +35,7 @@ CONFIG = {
     'batch_size':     512,
     'learning_rate':  1e-3,
     'num_epochs':      50,
-    'scheduler_step_size': 100,
-    'scheduler_gamma':     0.1,
+    'warmup_ratio':    0.1,
 
     # データ
     'data_dir':       '/kaggle/input/puyo-data',
@@ -150,7 +150,7 @@ def create_loaders(X, y, batch_size, val_split):
 # ------------------------------ #
 # 4.  学習・評価ループ
 # ------------------------------ #
-def train_epoch(model, loader, criterion, optim_, device):
+def train_epoch(model, loader, criterion, optim_, scheduler, device):
     model.train()
     total_loss, correct, total = 0, 0, 0
     for data, target in tqdm(loader, desc='Train', leave=False):
@@ -160,6 +160,7 @@ def train_epoch(model, loader, criterion, optim_, device):
         loss = criterion(out, target)
         loss.backward()
         optim_.step()
+        scheduler.step()
 
         total_loss += loss.item()
         pred = out.argmax(1)
@@ -212,11 +213,17 @@ def main():
     ).to(device)
     print(f'Total parameters: {sum(p.numel() for p in model.parameters()):,}')
 
+    # Calculate total steps for scheduler
+    total_steps = len(train_ld) * CONFIG['num_epochs']
+    warmup_steps = int(total_steps * CONFIG['warmup_ratio'])
+
     # Optimizer, Loss, Scheduler
     criterion = nn.CrossEntropyLoss()
     optim_ = optim.AdamW(model.parameters(), lr=CONFIG['learning_rate'])
-    sched  = optim.lr_scheduler.StepLR(
-        optim_, step_size=CONFIG['scheduler_step_size'], gamma=CONFIG['scheduler_gamma']
+    sched = get_cosine_schedule_with_warmup(
+        optimizer=optim_,
+        num_warmup_steps=warmup_steps,
+        num_training_steps=total_steps
     )
 
     # 学習ループ
@@ -226,9 +233,8 @@ def main():
 
     for epoch in range(CONFIG['num_epochs']):
         print(f'\nEpoch {epoch+1}/{CONFIG["num_epochs"]}')
-        train_loss, train_acc = train_epoch(model, train_ld, criterion, optim_, device)
+        train_loss, train_acc = train_epoch(model, train_ld, criterion, optim_, sched, device)
         val_loss, val_acc     = validate(model, val_ld, criterion, device)
-        sched.step()
 
         # ログ
         wandb.log({
